@@ -1,0 +1,5 @@
+static
+venv
+.idea
+__pycache__
+bookings.pickle
