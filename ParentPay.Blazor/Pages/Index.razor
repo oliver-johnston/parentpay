@@ -1,0 +1,160 @@
+@page "/"
+@using ParentPay.Blazor.Scraping
+@inject IParentPayScraper _scraper
+
+<div class="main">
+    <nav class="navbar navbar-dark bg-dark">
+        <a class="navbar-brand" href="">Parent Pay Scraper</a>
+    </nav>
+
+    <div class="content px-4" style="max-width: 1000px">
+        <div>
+            <input type="date" @bind="Date"/>
+            <input type="email" @bind="Email" placeholder="Username"/>
+            <input type="password" @bind="Password" placeholder="Password"/>
+            <button class="btn btn-primary" @onclick="LoadBookingsAsync">
+                @if (Loading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span>Loading...</span>
+                }
+                else
+                {
+                    <span>Fetch Bookings</span>
+                }
+            </button>
+        </div>
+        @if (Error != null)
+        {
+            <div class="alert alert-danger" role="alert">
+                @Error
+            </div>
+        }
+        <br />
+        @if (Bookings != null && Bookings.Any())
+        {
+            <h2>Bookings</h2>
+            foreach (var clubTypeGroup in Bookings.GroupBy(x => x.Club.Type))
+            {
+                <div>
+                    <h3>@clubTypeGroup.Key</h3>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Date</th>
+                            @foreach (var child in Children)
+                            {
+                                <th>@child.Name</th>
+                            }
+                        </tr>
+                        @foreach (var date in Dates)
+                        {
+                            <tr>
+                                <td>@date.ToString("ddd dd MMM")</td>
+                                @foreach (var child in Children)
+                                {
+                                    var childBookings = clubTypeGroup.Where(x => x.Date == date && x.Child.Id == child.Id).ToList();
+                                    if (!childBookings.Any())
+                                    {
+                                        <td class="table-warning">None</td>
+                                    }
+                                    else
+                                    {
+                                        <td class="@(childBookings.Count > 1 ? "table-danger" : "")">
+                                            @foreach (var booking in childBookings)
+                                            {
+                                                <p>@booking.Club.Name</p>
+                                            }
+                                        </td>
+                                    }
+                                }
+                            </tr>
+                        }
+                    </table>
+                </div>
+            }
+            <div>
+                <h2>Links</h2>
+                @foreach (var link in Bookings.GroupBy(x => $"{x.Child.Name} - {x.Club.Type} - {x.Club.Name}").OrderBy(x => x.Key))
+                {
+                    <li>
+                        <a href="@link.First().Url" target="_blank">@link.Key</a>
+                    </li>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+
+    private DateTime _date;
+    private DateTime Date
+    {
+        get => _date;
+        set => _date = PreviousMonday(value);
+    }
+
+    private string Email { get; set; }
+    private string Password { get; set; }
+    private bool Loading { get; set; }
+    private string Error { get; set; }
+
+    private IList<Booking> Bookings { get; set; }
+    private IList<DateTime> Dates { get; set; }
+    private IList<Child> Children { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Date = GetQueryDate();
+
+        var response = await _scraper.GetBookingsAsync();
+
+        Bookings = response.Bookings;
+        Dates = response.Dates;
+        Children = response.Children;
+    }
+
+    private DateTime GetQueryDate()
+    {
+        var date = DateTime.Today;
+        if (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday)
+        {
+            date = date.AddDays(7);
+        }
+        return PreviousMonday(date);
+    }
+    
+    private DateTime PreviousMonday(DateTime date)
+    {
+        while (date.DayOfWeek != DayOfWeek.Monday)
+        {
+            date = date.AddDays(-1);
+        }
+
+        return date;
+    }
+
+    private async Task LoadBookingsAsync()
+    {
+        try
+        {
+            Loading = true;
+            Error = null;
+
+            var response = await _scraper.ReloadBookingsAsync(Date, Email, Password);
+
+            Dates = response.Dates;
+            Children = response.Children;
+            Bookings = response.Bookings;
+        }
+        catch (Exception e)
+        {
+            Error = e.ToString();
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+}
