@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,7 @@ namespace ParentPay.Blazor.Scraping
     {
         // TODO - cache this some other way
         private static BookingsResponse _scrapedBookings = new BookingsResponse();
-        
+
         private readonly ScraperOptions _options;
 
         public ParentPayScraper(IOptions<ScraperOptions> options)
@@ -39,7 +40,8 @@ namespace ParentPay.Blazor.Scraping
             {
                 foreach (var club in _options.Clubs)
                 {
-                    var url = $"https://app.parentpay.com/V3Payer4VBW3/Consumer/MB_MenuSelection2.aspx?bookingID={club.Id}&ConsumerId={child.Id}&date={weekDate:yyyy-MM-dd}";
+                    var url =
+                        $"https://app.parentpay.com/V3Payer4VBW3/Consumer/MB_MenuSelection2.aspx?bookingID={club.Id}&ConsumerId={child.Id}&date={weekDate:yyyy-MM-dd}";
                     await page.GoToAsync(url);
                     await page.WaitForSelectorAsync("th[class^=date]");
 
@@ -53,7 +55,7 @@ namespace ParentPay.Blazor.Scraping
                         var dateStr = classes.First(x => x.StartsWith("date"))
                             .Replace("date-", "");
                         var date = DateTime.ParseExact(dateStr, "yyyy_MM_dd", null, DateTimeStyles.None);
-                        
+
                         dates.Add(date);
 
                         if (classes.Contains("chosen"))
@@ -70,6 +72,22 @@ namespace ParentPay.Blazor.Scraping
                 }
             }
 
+            foreach (var date in dates.Distinct())
+            {
+                foreach (var club in _options.ExtraClubs)
+                {
+                    if (date.DayOfWeek == club.Day)
+                    {
+                        bookings.Add(new Booking
+                        {
+                            Child = _options.Children.First(c => c.Name == club.Child),
+                            Club = club.Club,
+                            Date = date
+                        });
+                    }
+                }
+            }
+
             _scrapedBookings = new BookingsResponse
             {
                 Bookings = bookings,
@@ -82,12 +100,18 @@ namespace ParentPay.Blazor.Scraping
 
         private async Task<Browser> CreateBrowserAsync()
         {
-            var browserFetcher = Puppeteer.CreateBrowserFetcher(new BrowserFetcherOptions
+            var pathsToTry = new[]
             {
-                Product = Product.Chrome
+                "/usr/bin/chromium-browser",
+                @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+            };
+            var path = pathsToTry.First(File.Exists);
+            return await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = path,
+                Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
             });
-            await browserFetcher.DownloadAsync();
-            return await Puppeteer.LaunchAsync(new LaunchOptions());
         }
 
         private async Task LoginAsync(Page page, string username, string password)
