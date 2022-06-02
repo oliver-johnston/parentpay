@@ -76,7 +76,12 @@ namespace ParentPay.Blazor.Scraping
             {
                 foreach (var club in _options.ExtraClubs)
                 {
-                    if (date.DayOfWeek == club.Day)
+                    if ((club.StartDate != null
+                         && club.EndDate != null
+                         && club.StartDate <= date
+                         && date <= club.EndDate
+                         && club.Day == date.DayOfWeek)
+                        || (club.Dates != null && club.Dates.Contains(date)))
                     {
                         bookings.Add(new Booking
                         {
