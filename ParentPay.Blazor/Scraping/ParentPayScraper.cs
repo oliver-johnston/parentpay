@@ -43,9 +43,9 @@ namespace ParentPay.Blazor.Scraping
                     var url =
                         $"https://app.parentpay.com/V3Payer4VBW3/Consumer/MB_MenuSelection2.aspx?bookingID={club.Id}&ConsumerId={child.Id}&date={weekDate:yyyy-MM-dd}";
                     await page.GoToAsync(url);
-                    await page.WaitForSelectorAsync("th[class^=date]");
+                    await page.WaitForSelectorAsync("th[class|=date]");
 
-                    var headers = await page.QuerySelectorAllAsync("th[class^=date]");
+                    var headers = await page.QuerySelectorAllAsync("th[class|=date]");
 
                     foreach (var header in headers)
                     {
